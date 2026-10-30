@@ -69,3 +69,13 @@ mvn spring-boot:run
   токеном — `401`.
 - `GET /api/orders/{id}` — тот же токен; возвращает заказ, только если `id` принадлежит
   владельцу токена, иначе `404` (чужой заказ или несуществующий id — не различаются).
+
+## Логи и метрики
+
+Логи — JSON через Logback (`logback-spring.xml`, `logstash-logback-encoder`): `timestamp`,
+`level`, `message`, `service`, `app_version` плюс `trace_id` из `X-Trace-Id`
+(`TraceIdFilter` читает заголовок или генерирует новый и кладёт в MDC) и
+`action`/`authz_result`/`user_id` там, где это осмысленно (`SsoController`, `OrderController`).
+
+`GET /actuator/prometheus` — метрики через Micrometer. Полная схема сбора
+(Grafana+Loki+Prometheus) — в корневом `MONITORING.md`.

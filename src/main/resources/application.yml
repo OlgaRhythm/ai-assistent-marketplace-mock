@@ -18,3 +18,9 @@ sso:
 
 assistant:
   frontend-url: ${ASSISTANT_FRONTEND_URL:http://localhost:5173}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus

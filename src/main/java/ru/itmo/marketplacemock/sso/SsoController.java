@@ -3,6 +3,9 @@ package ru.itmo.marketplacemock.sso;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import net.logstash.logback.marker.Markers;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,6 +18,8 @@ import ru.itmo.marketplacemock.user.MockUserRepository;
 @RestController
 @RequestMapping("/api")
 public class SsoController {
+
+    private static final Logger log = LoggerFactory.getLogger(SsoController.class);
 
     private final MockUserRepository users;
     private final PasswordEncoder passwordEncoder;
@@ -34,8 +39,12 @@ public class SsoController {
         String hashToCheck = user.map(MockUser::getPasswordHash).orElse(dummyHash);
         boolean passwordMatches = passwordEncoder.matches(request.password(), hashToCheck);
         if (user.isEmpty() || !passwordMatches) {
+            log.warn(Markers.appendEntries(Map.of("action", "sso_login", "authz_result", "denied")),
+                    "login rejected");
             return ResponseEntity.status(401).body(Map.of("error", "Invalid username or password."));
         }
+        log.info(Markers.appendEntries(Map.of("action", "sso_login", "authz_result", "allowed", "user_id", user.get().getId())),
+                "login ok");
         return ResponseEntity.ok(Map.of("token", jwtService.issueToken(user.get().getId())));
     }
 }
