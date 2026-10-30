@@ -28,9 +28,9 @@ public class SsoController {
     @PostMapping("/auth/login")
     public ResponseEntity<Map<String, String>> login(@RequestBody LoginRequest request) {
         Optional<MockUser> user = users.findByUsername(request.username());
-        if (user.isEmpty() || !passwordEncoder.matches(request.password(), user.get().passwordHash())) {
+        if (user.isEmpty() || !passwordEncoder.matches(request.password(), user.get().getPasswordHash())) {
             return ResponseEntity.status(401).body(Map.of("error", "Invalid username or password."));
         }
-        return ResponseEntity.ok(Map.of("token", jwtService.issueToken(user.get().id())));
+        return ResponseEntity.ok(Map.of("token", jwtService.issueToken(user.get().getId())));
     }
 }

@@ -1,6 +1,17 @@
 server:
   port: 8081
 
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/marketplace-mock;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+
 sso:
   shared-secret: ${SSO_SHARED_SECRET:local-dev-sso-shared-secret-change-me-in-prod}
   token-ttl: PT5M
