@@ -11,6 +11,7 @@
         button { cursor: pointer; }
         .error { color: #c0392b; font-size: 13px; }
         .hint { color: #888; font-size: 12px; }
+        .welcome { margin-bottom: 16px; }
         .chat-pane { flex: 1; display: flex; }
         iframe { flex: 1; border: none; }
         .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #888; }
@@ -19,20 +20,32 @@
 <body>
 <div class="storefront">
     <h1>Маркетплейс (мок)</h1>
-    <form id="loginForm">
-        <input id="username" type="text" placeholder="Логин" autocomplete="username" required>
-        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
-        <button type="submit">Войти</button>
-    </form>
-    <p id="loginError" class="error"></p>
-    <p class="hint">alice / alice123, boris / boris123, victoria / victoria123</p>
+
+    <div id="loggedOutView">
+        <form id="loginForm">
+            <input id="username" type="text" placeholder="Логин" autocomplete="username" required>
+            <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
+            <button type="submit">Войти</button>
+        </form>
+        <p id="loginError" class="error"></p>
+        <p class="hint">alice / alice123, boris / boris123, victoria / victoria123</p>
+    </div>
+
+    <div id="loggedInView" hidden>
+        <p class="welcome">Добро пожаловать, <span id="welcomeUsername"></span></p>
+        <button id="logoutButton" type="button">Выйти</button>
+    </div>
 </div>
 <div class="chat-pane" id="chatPane">
-    <div class="placeholder">Войдите слева</div>
+    <div class="placeholder">Войдите, чтобы увидеть контент</div>
 </div>
 
 <script th:inline="javascript">
     const assistantFrontendUrl = /*[[${assistantFrontendUrl}]]*/ 'http://localhost:5173';
+
+    const loggedOutView = document.getElementById('loggedOutView');
+    const loggedInView = document.getElementById('loggedInView');
+    const chatPane = document.getElementById('chatPane');
 
     async function login(event) {
         event.preventDefault();
@@ -54,14 +67,27 @@
         }
 
         const { token } = await response.json();
-        const chatPane = document.getElementById('chatPane');
+
+        document.getElementById('welcomeUsername').textContent = username;
+        loggedOutView.hidden = true;
+        loggedInView.hidden = false;
+
         chatPane.innerHTML = '';
         const iframe = document.createElement('iframe');
         iframe.src = `${assistantFrontendUrl}?sso_token=${encodeURIComponent(token)}`;
         chatPane.appendChild(iframe);
     }
 
+    function logout() {
+        loggedInView.hidden = true;
+        loggedOutView.hidden = false;
+        document.getElementById('loginForm').reset();
+        document.getElementById('loginError').textContent = '';
+        chatPane.innerHTML = '<div class="placeholder">Войдите, чтобы увидеть контент</div>';
+    }
+
     document.getElementById('loginForm').addEventListener('submit', login);
+    document.getElementById('logoutButton').addEventListener('click', logout);
 </script>
 </body>
 </html>
