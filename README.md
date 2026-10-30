@@ -110,3 +110,23 @@ mvn spring-boot:run
 исключён из общего Prometheus/Loki — см. `MONITORING.md`, он стоит в роли внешнего
 сервиса, а не части системы ассистента). Полная схема сбора (Grafana+Loki+Prometheus) —
 в `MONITORING.md`.
+
+## Grafana
+
+- URL: `http://localhost:3001`
+- Логин/пароль: `admin` / `local-dev-grafana-password-change-me` (дефолты из
+  `docker-compose.yml`, переменные `GRAFANA_ADMIN_USER`/`GRAFANA_ADMIN_PASSWORD` —
+  переопределить до `docker compose up`, если нужен другой пароль).
+- **Explore** (левое меню) → датасорс **Loki** → поиск логов, например
+  `{compose_service="backend"}`, можно фильтровать по `trace_id`.
+- **Alerting → Alert rules** → правило `Auth failure spike` (следит за всплеском
+  неудачных авторизаций, подробности в `MONITORING.md`).
+
+## Prometheus
+
+- URL: `http://localhost:9090`, без логина/пароля (аутентификация не настроена — доступен
+  только на localhost, порт никуда не публикуется).
+- **Status → Targets** — что скрейпится прямо сейчас (`backend`, `ml`; `marketplace-mock`
+  туда намеренно не входит).
+- Можно гонять PromQL-запросы напрямую, например `rate(auth_failures_total[1m])` — именно
+  это выражение лежит в основе алерта в Grafana.
