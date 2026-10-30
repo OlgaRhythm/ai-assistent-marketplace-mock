@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Маркетплейс (мок)</title>
+    <style>
+        body { font-family: system-ui, sans-serif; margin: 0; display: flex; height: 100vh; }
+        .storefront { width: 360px; padding: 24px; border-right: 1px solid #ddd; box-sizing: border-box; }
+        .storefront h1 { font-size: 18px; margin-bottom: 16px; }
+        input, button { width: 100%; padding: 8px; margin-bottom: 12px; font-size: 14px; box-sizing: border-box; }
+        button { cursor: pointer; }
+        .error { color: #c0392b; font-size: 13px; }
+        .hint { color: #888; font-size: 12px; }
+        .chat-pane { flex: 1; display: flex; }
+        iframe { flex: 1; border: none; }
+        .placeholder { flex: 1; display: flex; align-items: center; justify-content: center; color: #888; }
+    </style>
+</head>
+<body>
+<div class="storefront">
+    <h1>Маркетплейс (мок)</h1>
+    <form id="loginForm">
+        <input id="username" type="text" placeholder="Логин" autocomplete="username" required>
+        <input id="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
+        <button type="submit">Войти</button>
+    </form>
+    <p id="loginError" class="error"></p>
+    <p class="hint">alice / alice123, boris / boris123, victoria / victoria123</p>
+</div>
+<div class="chat-pane" id="chatPane">
+    <div class="placeholder">Войдите слева</div>
+</div>
+
+<script th:inline="javascript">
+    const assistantFrontendUrl = /*[[${assistantFrontendUrl}]]*/ 'http://localhost:5173';
+
+    async function login(event) {
+        event.preventDefault();
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+        const errorEl = document.getElementById('loginError');
+        errorEl.textContent = '';
+
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+        });
+
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            errorEl.textContent = body.error || 'Не удалось войти.';
+            return;
+        }
+
+        const { token } = await response.json();
+        const chatPane = document.getElementById('chatPane');
+        chatPane.innerHTML = '';
+        const iframe = document.createElement('iframe');
+        iframe.src = `${assistantFrontendUrl}?sso_token=${encodeURIComponent(token)}`;
+        chatPane.appendChild(iframe);
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', login);
+</script>
+</body>
+</html>

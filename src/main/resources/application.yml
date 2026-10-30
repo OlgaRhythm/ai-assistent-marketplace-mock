@@ -1,0 +1,9 @@
+server:
+  port: 8081
+
+sso:
+  shared-secret: ${SSO_SHARED_SECRET:local-dev-sso-shared-secret-change-me-in-prod}
+  token-ttl: PT5M
+
+assistant:
+  frontend-url: ${ASSISTANT_FRONTEND_URL:http://localhost:5173}
