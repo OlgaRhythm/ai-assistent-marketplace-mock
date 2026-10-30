@@ -3,7 +3,7 @@ server:
 
 spring:
   datasource:
-    url: jdbc:h2:file:./data/marketplace-mock;AUTO_SERVER=TRUE
+    url: jdbc:h2:file:./data/marketplace-mock
     driver-class-name: org.h2.Driver
     username: sa
     password: ""

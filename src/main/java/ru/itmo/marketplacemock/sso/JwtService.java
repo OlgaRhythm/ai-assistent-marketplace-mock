@@ -29,4 +29,14 @@ public class JwtService {
                 .signWith(key, Jwts.SIG.HS256)
                 .compact();
     }
+
+    public long verifyAndGetUserId(String token) {
+        return Long.parseLong(
+                Jwts.parser()
+                        .verifyWith(key)
+                        .build()
+                        .parseSignedClaims(token)
+                        .getPayload()
+                        .getSubject());
+    }
 }
