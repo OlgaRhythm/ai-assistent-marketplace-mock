@@ -22,6 +22,30 @@ BCrypt-хэши. При первом старте с пустой базой `De
 | boris | boris123 | 6 |
 | victoria | victoria123 | 7 |
 
+## Таблицы
+
+Обе таблицы — в той же файловой базе H2, схема создаётся/обновляется автоматически
+(`spring.jpa.hibernate.ddl-auto: update`), сидятся один раз при первом запуске на пустой базе.
+
+### `mock_users`
+
+| Колонка | Тип | Описание |
+|---|---|---|
+| `id` | bigint, PK | тот самый `userId`, который попадает в `sub` выпущенного JWT |
+| `name` | varchar | отображаемое имя ("Алиса") |
+| `username` | varchar, unique | логин для `/api/auth/login` |
+| `password_hash` | varchar | BCrypt-хэш пароля |
+
+### `orders`
+
+| Колонка | Тип | Описание |
+|---|---|---|
+| `id` | bigint, PK, autoincrement | id заказа |
+| `user_id` | bigint | владелец заказа — `id` из `mock_users` |
+| `order_composition` | varchar | состав заказа |
+| `status` | varchar | статус (`created`, `delivered`, ...) |
+| `delivery_date` | timestamp | дата доставки |
+
 ## Запуск
 
 ```bash
@@ -40,3 +64,8 @@ mvn spring-boot:run
 
 - `GET /` — страница маркетплейса.
 - `POST /api/auth/login` — `{"username": "...", "password": "..."}` → `{"token": "..."}` или `401`.
+- `GET /api/orders` — требует `Authorization: Bearer <token>`; возвращает заказы владельца
+  токена: `[{"id", "orderComposition", "status", "deliveryDate"}, ...]`. Без токена/с неверным
+  токеном — `401`.
+- `GET /api/orders/{id}` — тот же токен; возвращает заказ, только если `id` принадлежит
+  владельцу токена, иначе `404` (чужой заказ или несуществующий id — не различаются).
