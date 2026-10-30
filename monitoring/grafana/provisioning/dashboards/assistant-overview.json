@@ -1,0 +1,153 @@
+{
+  "uid": "assistant-overview",
+  "title": "AI Assistant — overview",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Закрыто без оператора",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type!=\"OPERATOR\" [$__range]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "title": "Передано оператору",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type=\"OPERATOR\" [$__range]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "title": "% передано оператору (цель < 20%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type=\"OPERATOR\" [$__range])) / sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json [$__range])) * 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Uptime backend (цель > 99.5%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        { "refId": "A", "expr": "avg_over_time(up{job=\"backend\"}[$__range]) * 100" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 99.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "title": "Uptime ml (цель > 99.5%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        { "refId": "A", "expr": "avg_over_time(up{job=\"ml\"}[$__range]) * 100" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 99.5 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "title": "Неудачных авторизаций за период",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        { "refId": "A", "expr": "sum(increase(auth_failures_total[$__range]))" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "title": "Время ответа /support, мс (avg / p95)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "avg",
+          "expr": "avg_over_time({compose_service=\"backend\"} |= \"support response\" | json totalMs=\"totalMs\" | unwrap totalMs [$__interval])"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "p95",
+          "expr": "quantile_over_time(0.95, {compose_service=\"backend\"} |= \"support response\" | json totalMs=\"totalMs\" | unwrap totalMs [$__interval])"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "title": "Неудачные авторизации, rate/сек (алерт: Auth failure spike)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        { "refId": "A", "legendFormat": "auth_failures rate", "expr": "rate(auth_failures_total[5m])" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    }
+  ]
+}
