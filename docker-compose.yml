@@ -1,0 +1,158 @@
+# Поднимает весь стек AI-ассистента одной командой: фронтенд + backend + ML +
+# маркетплейс + мониторинг (Grafana/Loki/Prometheus).
+#
+# Этот файл ожидает остальные 3 репозитория как соседей папки, в которой он
+# лежит (marketplace-mock), а не внутри неё:
+#
+#   ai-assistent/
+#   ├── marketplace-mock/            <- этот репозиторий, тут и docker-compose.yml
+#   ├── Market_AI_assistent_backend/
+#   ├── ai-assistent-frontend/
+#   └── ai-assistant/
+#
+# git clone <marketplace-mock>            ai-assistent/marketplace-mock
+# git clone <Market_AI_assistent_backend> ai-assistent/Market_AI_assistent_backend
+# git clone <ai-assistent-frontend>       ai-assistent/ai-assistent-frontend
+# git clone <ai-assistant>                ai-assistent/ai-assistant
+#
+# Запуск из папки marketplace-mock:  docker compose up -d --build
+#
+# Ollama не контейнеризована — используется удалённый/локальный инстанс по
+# адресу OLLAMA_BASE_URL (см. ниже).
+
+name: ai-assistent
+
+services:
+  ml:
+    build:
+      context: ../ai-assistant
+    container_name: ai-assistant
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Адрес Ollama с загруженной моделью gemma4:e4b. Переопределить можно
+      # переменной окружения OLLAMA_BASE_URL перед запуском, например:
+      #   OLLAMA_BASE_URL=http://host.docker.internal:11434 docker compose up -d
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://130.49.188.18:11434}
+      APP_VERSION: "0.1.0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  backend:
+    build:
+      context: ../Market_AI_assistent_backend
+    container_name: market-ai-assistant-backend
+    restart: unless-stopped
+    ports:
+      - "5005:5005"
+    environment:
+      PORT: "5005"
+      # Обращается к ML-сервису по имени сервиса в общей docker-сети, а не
+      # через localhost/host.docker.internal.
+      FASTAPI_HOST: http://ml:8000
+      MARKETPLACE_BASE_URL: http://marketplace-mock:8081
+      SSO_SHARED_SECRET: ${SSO_SHARED_SECRET:-local-dev-sso-shared-secret-change-me-in-prod}
+    depends_on:
+      - ml
+      - marketplace-mock
+
+  marketplace-mock:
+    build:
+      context: .
+    container_name: marketplace-mock
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    environment:
+      SSO_SHARED_SECRET: ${SSO_SHARED_SECRET:-local-dev-sso-shared-secret-change-me-in-prod}
+      ASSISTANT_FRONTEND_URL: http://localhost:${FRONTEND_PORT:-8080}
+    volumes:
+      - marketplace-mock-data:/app/data
+
+  frontend:
+    build:
+      context: ../ai-assistent-frontend
+    container_name: ai-assistent-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    environment:
+      BACKEND_URL: http://backend:5005
+    depends_on:
+      - backend
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "wget -q -O /dev/null http://127.0.0.1:80/ || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: loki
+    restart: unless-stopped
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+
+  promtail:
+    image: grafana/promtail:3.3.0
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+  webhook-receiver:
+    build:
+      context: ./monitoring/webhook-receiver
+    container_name: webhook-receiver
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-local-dev-grafana-password-change-me}
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+      - prometheus
+      - webhook-receiver
+
+volumes:
+  marketplace-mock-data:
+  loki-data:
+  prometheus-data:
+  grafana-data:

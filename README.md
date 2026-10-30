@@ -10,6 +10,35 @@
 2. **Витрина маркетплейса** — страница с формой логина и встроенным через `<iframe>`
    ассистентом, которому токен передаётся как `?sso_token=...` в URL.
 
+## Запуск всего стека (все 4 сервиса + мониторинг)
+
+`docker-compose.yml` в этом репозитории поднимает весь стек: себя, `Market_AI_assistent_backend`,
+`ai-assistent-frontend`, `ai-assistant`, и мониторинг (Grafana/Loki/Prometheus — см.
+`MONITORING.md`). Он ожидает остальные три репозитория как соседей этой папки:
+
+```
+ai-assistent/
+├── marketplace-mock/            <- вы тут, здесь и docker-compose.yml
+├── Market_AI_assistent_backend/
+├── ai-assistent-frontend/
+└── ai-assistant/
+```
+
+```bash
+mkdir ai-assistent && cd ai-assistent
+git clone <url-marketplace-mock> marketplace-mock
+git clone <url-Market_AI_assistent_backend> Market_AI_assistent_backend
+git clone <url-ai-assistent-frontend> ai-assistent-frontend
+git clone <url-ai-assistant> ai-assistant
+
+cd marketplace-mock
+docker compose up -d --build
+```
+
+Поднимутся: `frontend` (`:8080`), `backend` (`:5005`), `ml` (`:8000`), `marketplace-mock`
+(`:8081`), `grafana` (`:3001`), `prometheus` (`:9090`). Открыть маркетплейс:
+`http://localhost:8081`.
+
 ## Тестовые пользователи
 
 Пользователи хранятся в файловой базе H2 (`./data/marketplace-mock.mv.db`, в Docker — на
@@ -77,5 +106,7 @@ mvn spring-boot:run
 (`TraceIdFilter` читает заголовок или генерирует новый и кладёт в MDC) и
 `action`/`authz_result`/`user_id` там, где это осмысленно (`SsoController`, `OrderController`).
 
-`GET /actuator/prometheus` — метрики через Micrometer. Полная схема сбора
-(Grafana+Loki+Prometheus) — в корневом `MONITORING.md`.
+`GET /actuator/prometheus` — метрики через Micrometer (сам `marketplace-mock` сознательно
+исключён из общего Prometheus/Loki — см. `MONITORING.md`, он стоит в роли внешнего
+сервиса, а не части системы ассистента). Полная схема сбора (Grafana+Loki+Prometheus) —
+в `MONITORING.md`.

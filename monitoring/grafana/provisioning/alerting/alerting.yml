@@ -1,0 +1,50 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: webhook-receiver
+    receivers:
+      - uid: webhook-receiver-1
+        type: webhook
+        settings:
+          url: http://webhook-receiver:9000/alert
+
+policies:
+  - orgId: 1
+    receiver: webhook-receiver
+
+groups:
+  - orgId: 1
+    name: suspicious-activity
+    folder: Suspicious Activity
+    interval: 1m
+    rules:
+      - uid: auth-failure-spike
+        title: Auth failure spike
+        condition: C
+        for: 0s
+        noDataState: NoData
+        execErrState: Error
+        annotations:
+          summary: "Spike in SSO auth failures — possible brute force / IDOR probing"
+        labels: {}
+        data:
+          - refId: A
+            datasourceUid: prometheus-uid
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: rate(auth_failures_total[1m])
+              instant: true
+              refId: A
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: A
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [0.05]
