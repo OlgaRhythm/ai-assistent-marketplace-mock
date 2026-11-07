@@ -6,32 +6,52 @@
   "version": 1,
   "time": { "from": "now-6h", "to": "now" },
   "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "trace_id",
+        "type": "textbox",
+        "label": "trace_id (для сквозного поиска)",
+        "query": "",
+        "current": { "value": "", "text": "" }
+      }
+    ]
+  },
   "panels": [
     {
       "id": 1,
-      "title": "Закрыто без оператора",
+      "title": "% закрыто без оператора (цель > 80%)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
-      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type!=\"OPERATOR\" [$__range]))"
+          "expr": "sum(increase(support_responses_total{type!=\"OPERATOR\"}[$__range])) / sum(increase(support_responses_total[$__range])) * 100"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 80 }
+            ]
+          }
+        },
+        "overrides": []
+      }
     },
     {
       "id": 2,
-      "title": "Передано оператору",
+      "title": "Передано оператору, шт",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
-      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
       "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type=\"OPERATOR\" [$__range]))"
-        }
+        { "refId": "A", "expr": "sum(increase(support_responses_total{type=\"OPERATOR\"}[$__range]))" }
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
     },
@@ -40,11 +60,11 @@
       "title": "% передано оператору (цель < 20%)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
-      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json | type=\"OPERATOR\" [$__range])) / sum(count_over_time({compose_service=\"backend\"} |= \"support response\" | json [$__range])) * 100"
+          "expr": "sum(increase(support_responses_total{type=\"OPERATOR\"}[$__range])) / sum(increase(support_responses_total[$__range])) * 100"
         }
       ],
       "fieldConfig": {
@@ -148,6 +168,164 @@
         { "refId": "A", "legendFormat": "auth_failures rate", "expr": "rate(auth_failures_total[5m])" }
       ],
       "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 9,
+      "title": "% ответов с confidence > 0.85 (цель 85%)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(sum(increase(classification_confidence_bucket{le=\"+Inf\"}[$__range])) - sum(increase(classification_confidence_bucket{le=\"0.85\"}[$__range]))) / sum(increase(classification_confidence_bucket{le=\"+Inf\"}[$__range])) * 100"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 85 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 10,
+      "title": "Confidence классификатора, p50 / p95",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 6, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "p50",
+          "expr": "histogram_quantile(0.5, sum(rate(classification_confidence_bucket[$__interval])) by (le))"
+        },
+        {
+          "refId": "B",
+          "legendFormat": "p95",
+          "expr": "histogram_quantile(0.95, sum(rate(classification_confidence_bucket[$__interval])) by (le))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "max": 1, "min": 0 }, "overrides": [] }
+    },
+    {
+      "id": 11,
+      "title": "Эскалации оператору по причине",
+      "type": "bargauge",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 12 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{reason}}",
+          "expr": "sum by (reason) (increase(escalations_total[$__range]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 12,
+      "title": "HTTP ошибки backend (5xx), rate/сек",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "5xx rate",
+          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 13,
+      "title": "HTTP запросы backend по статусу, rate/сек",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "legendFormat": "{{status}}",
+          "expr": "sum by (status) (rate(http_requests_total[5m]))"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 14,
+      "title": "Поиск по trace_id (заполните переменную сверху слева)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{compose_service=~\"backend|ml\"} |= \"$trace_id\""
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 15,
+      "title": "Ошибки backend (level=error)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 36 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{compose_service=\"backend\"} | json | level=\"error\""
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 16,
+      "title": "Эскалации оператору",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 36 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{compose_service=\"backend\"} |= \"escalated to operator\""
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 17,
+      "title": "Логи ML-сервиса",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 44 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        { "refId": "A", "expr": "{compose_service=\"ml\"}" }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
+    },
+    {
+      "id": 18,
+      "title": "Ошибки фронтенда (service=frontend)",
+      "type": "logs",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 44 },
+      "datasource": { "type": "loki", "uid": "loki-uid" },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "{compose_service=\"backend\"} | json | service=\"frontend\""
+        }
+      ],
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending", "enableLogDetails": true }
     }
   ]
 }
