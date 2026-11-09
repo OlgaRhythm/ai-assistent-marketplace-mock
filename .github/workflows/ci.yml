@@ -24,10 +24,12 @@ jobs:
           java-version: 21
           cache: maven
       - name: Verify Maven build
+        id: maven
         run: mvn --batch-mode --no-transfer-progress verify
       - name: Build Docker image
         run: docker build --tag app:ci .
       - name: Smoke test SSO and order isolation
+        shell: bash
         run: |
           container=$(docker run --detach --publish 127.0.0.1::8081 \
             --env "SSO_SHARED_SECRET=$(openssl rand -hex 32)" app:ci)
@@ -41,7 +43,7 @@ jobs:
 
           base_url="http://$(docker port "$container" 8081/tcp)"
           curl --fail --silent --show-error --max-time 5 --retry 20 \
-            --retry-connrefused --retry-delay 2 "$base_url/actuator/health" >/dev/null
+            --retry-all-errors --retry-delay 2 --output /dev/null "$base_url/actuator/health"
 
           login='{"username":"alice","password":"alice123"}'
           token=$(curl --fail --silent --show-error --max-time 10 \
@@ -70,6 +72,31 @@ jobs:
           test "$foreign" = 404
       - name: Build monitoring webhook image
         run: docker build --tag webhook-receiver:ci monitoring/webhook-receiver
+      - name: Scan dependencies and generate SBOM
+        if: ${{ !cancelled() && steps.maven.outcome == 'success' }}
+        env:
+          TRIVY_IMAGE: aquasec/trivy:0.76.2
+        run: |
+          mkdir -p "$RUNNER_TEMP/dependency-reports" "$RUNNER_TEMP/trivy-cache"
+          scan() {
+            docker run --rm \
+              -v "$GITHUB_WORKSPACE/pom.xml:/src/pom.xml:ro" \
+              -v "$HOME/.m2/repository:/root/.m2/repository:ro" \
+              -v "$RUNNER_TEMP/dependency-reports:/reports" \
+              -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
+              "$TRIVY_IMAGE" "$@"
+          }
+          # Maven verify has already resolved the dependencies. Reuse its POM cache.
+          scan fs --no-progress --offline-scan --format cyclonedx --output /reports/sbom.cdx.json /src
+          scan sbom --no-progress --format json --output /reports/trivy.json /reports/sbom.cdx.json
+          scan convert --scanners vuln --format table /reports/trivy.json
+      - name: Upload dependency reports
+        if: ${{ !cancelled() && steps.maven.outcome == 'success' }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: dependency-reports
+          path: ${{ runner.temp }}/dependency-reports/
+          retention-days: 14
 
   security:
     name: Security scans
@@ -78,7 +105,6 @@ jobs:
     env:
       GITLEAKS_IMAGE: ghcr.io/gitleaks/gitleaks:v8.30.1
       SEMGREP_IMAGE: semgrep/semgrep:1.184.0
-      TRIVY_IMAGE: aquasec/trivy:0.76.2
     steps:
       - uses: actions/checkout@v6
         with:
@@ -105,19 +131,6 @@ jobs:
             -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/ci-reports:/reports" \
             "$SEMGREP_IMAGE" semgrep scan --config p/default --metrics=off --disable-version-check \
             --json-output=/reports/semgrep.json /src
-      - name: Scan dependencies and generate SBOM
-        if: ${{ !cancelled() }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/trivy-cache"
-          scan() {
-            docker run --rm \
-              -v "$GITHUB_WORKSPACE:/src:ro" -v "$RUNNER_TEMP/ci-reports:/reports" \
-              -v "$RUNNER_TEMP/trivy-cache:/root/.cache/trivy" \
-              "$TRIVY_IMAGE" "$@"
-          }
-          scan fs --no-progress --scanners vuln --include-dev-deps --format json --output /reports/trivy.json /src
-          scan convert --format table /reports/trivy.json
-          scan fs --no-progress --include-dev-deps --format cyclonedx --output /reports/sbom.cdx.json /src
       - name: Upload security reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v6
